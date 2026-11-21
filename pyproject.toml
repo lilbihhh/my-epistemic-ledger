@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epistemic-ledger"
+version = "0.1.0"
+description = "Auditable AI reasoning stored in a tamper-evident hash-chained ledger"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph==1.2.24",
+    "openai==3.57.0",
+    "python-dotenv==1.2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",
+    "pylint==4.1.4",
+]
+
+[project.scripts]
+epistemic-ledger = "epistemic_ledger.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["epistemic_ledger*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pylint.main]
+py-version = "3.11"
+max-line-length = 100
+
+[tool.pylint."messages control"]
+disable = [
+    "too-few-public-methods",
+]

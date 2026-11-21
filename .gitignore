@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.netlify
+.pytest_cache/
+.pylint.d/
+*.egg-info/
+dist/
+build/
+ledger.jsonl
