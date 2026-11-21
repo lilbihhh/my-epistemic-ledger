@@ -51,23 +51,59 @@ def format_verification(result: VerifyResult) -> str:
     return for_terminal("\n".join(lines))
 
 
+def _summary_question(payload: dict[str, Any]) -> str:
+    return str(payload.get("question", ""))
+
+
+def _summary_decompose(payload: dict[str, Any]) -> str:
+    claims = payload.get("claims") or []
+    return "claims " + ", ".join(str(claim.get("id")) for claim in claims)
+
+
+def _summary_evidence(payload: dict[str, Any]) -> str:
+    claim_id = payload.get("claim_id")
+    quality = payload.get("quality")
+    reasoning = payload.get("reasoning", "")
+    return f"{claim_id} {quality} — {reasoning}"
+
+
+def _summary_score(payload: dict[str, Any]) -> str:
+    overall = payload.get("overall") or {}
+    return f"overall {overall.get('confidence')} via {payload.get('method')}"
+
+
+def _summary_answer(payload: dict[str, Any]) -> str:
+    return str(payload.get("answer", ""))
+
+
+def _summary_checkpoint(payload: dict[str, Any]) -> str:
+    root = str(payload.get("root", ""))[:16]
+    return f"merkle {root}  leaves {payload.get('leaf_count')}"
+
+
+def _summary_witness(payload: dict[str, Any]) -> str:
+    stance = payload.get("stance")
+    claim_id = payload.get("claim_id")
+    name = payload.get("witness_name")
+    return f"{stance} {claim_id} by {name}"
+
+
+_SUMMARIES = {
+    "question": _summary_question,
+    "decompose": _summary_decompose,
+    "evidence": _summary_evidence,
+    "score": _summary_score,
+    "answer": _summary_answer,
+    "checkpoint": _summary_checkpoint,
+    "witness": _summary_witness,
+}
+
+
 def _payload_summary(step: Any, payload: dict[str, Any]) -> str:
-    if step == "question":
-        return str(payload.get("question", ""))
-    if step == "decompose":
-        claims = payload.get("claims") or []
-        return "claims " + ", ".join(str(claim.get("id")) for claim in claims)
-    if step == "evidence":
-        claim_id = payload.get("claim_id")
-        quality = payload.get("quality")
-        reasoning = payload.get("reasoning", "")
-        return f"{claim_id} {quality} — {reasoning}"
-    if step == "score":
-        overall = payload.get("overall") or {}
-        return f"overall {overall.get('confidence')} via {payload.get('method')}"
-    if step == "answer":
-        return str(payload.get("answer", ""))
-    return ""
+    handler = _SUMMARIES.get(step)
+    if handler is None:
+        return ""
+    return handler(payload)
 
 
 def format_entry(entry: dict[str, Any]) -> str:
@@ -83,6 +119,7 @@ def format_entry(entry: dict[str, Any]) -> str:
         f"  session {entry.get('session_id')}\n"
         f"    prev {previous[:16]}  hash {digest[:16]}\n"
         f"    {summary}"
+        + (f"\n    signer {str(entry.get('signer'))[:16]}" if entry.get("signer") else "")
     )
 
 

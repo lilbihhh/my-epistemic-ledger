@@ -1,0 +1,154 @@
+{
+  "description": "Epistemic Ledger Protocol 1.0 test vectors. The Ed25519 seed is public test material.",
+  "seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+  "genesis": "0000000000000000000000000000000000000000000000000000000000000000",
+  "unsigned_question": {
+    "canonical": "{\"hash_alg\":\"sha256\",\"index\":0,\"payload\":{\"model\":\"mock-offline\",\"provider\":\"mock\",\"question\":\"vector\"},\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"session_id\":\"vector\",\"step\":\"question\",\"timestamp\":\"2026-11-21T12:00:00+00:00\",\"version\":\"1.0\"}",
+    "hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16",
+    "entry": {
+      "version": "1.0",
+      "index": 0,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "question",
+      "hash_alg": "sha256",
+      "payload": {
+        "question": "vector",
+        "provider": "mock",
+        "model": "mock-offline"
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16"
+    }
+  },
+  "two_entry_chain": [
+    {
+      "version": "1.0",
+      "index": 0,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "question",
+      "hash_alg": "sha256",
+      "payload": {
+        "question": "vector",
+        "provider": "mock",
+        "model": "mock-offline"
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16"
+    },
+    {
+      "version": "1.0",
+      "index": 1,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "decompose",
+      "hash_alg": "sha256",
+      "payload": {
+        "claims": [
+          {
+            "id": "c1",
+            "text": "vector"
+          }
+        ]
+      },
+      "prev_hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16",
+      "hash": "18fac2ece18645ccdc1f01be651d359521f0325b4f865f4bf9ba2714c1f0a032"
+    }
+  ],
+  "signed_question": {
+    "signable": "{\"hash_alg\":\"sha256\",\"index\":0,\"payload\":{\"model\":\"mock-offline\",\"provider\":\"mock\",\"question\":\"vector\"},\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"session_id\":\"vector\",\"signer\":\"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c\",\"step\":\"question\",\"timestamp\":\"2026-11-21T12:00:00+00:00\",\"version\":\"1.0\"}",
+    "entry": {
+      "version": "1.0",
+      "index": 0,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "question",
+      "hash_alg": "sha256",
+      "payload": {
+        "question": "vector",
+        "provider": "mock",
+        "model": "mock-offline"
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "signature": "c32df9e565dfa1ef6e8375452342a195bded1e404fea7bb1760ba31adb2bfcb2d2d7e930b3fe9b5f6611ca2e0f6943c0cc707f2faaeb9833037d181ef3e8a500",
+      "hash": "f34346bf263950dc9995e9e5a47b46e0099e4fd551ac496bc40c7e8eaa1fbb4c"
+    }
+  },
+  "bad_signature_entry": {
+    "version": "1.0",
+    "index": 0,
+    "timestamp": "2026-11-21T12:00:00+00:00",
+    "session_id": "vector",
+    "step": "question",
+    "hash_alg": "sha256",
+    "payload": {
+      "question": "vector",
+      "provider": "mock",
+      "model": "mock-offline"
+    },
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signature": "c32df9e565dfa1ef6e8375452342a195bded1e404fea7bb1760ba31adb2bfcb2d2d7e930b3fe9b5f6611ca2e0f6943c0cc707f2faaeb9833037d181ef3e8a501",
+    "hash": "1d9f2751b1a1c5793fa15283b23511513d391a8aeda4411f1dd5a428aeb7f625"
+  },
+  "out_of_order": [
+    {
+      "version": "1.0",
+      "index": 0,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "question",
+      "hash_alg": "sha256",
+      "payload": {
+        "question": "vector",
+        "provider": "mock",
+        "model": "mock-offline"
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16"
+    },
+    {
+      "version": "1.0",
+      "index": 1,
+      "timestamp": "2026-11-21T12:00:00+00:00",
+      "session_id": "vector",
+      "step": "answer",
+      "hash_alg": "sha256",
+      "payload": {
+        "answer": "too soon",
+        "uncertainties": [],
+        "overall_confidence": 0.05,
+        "method": "structural-evidence-v1"
+      },
+      "prev_hash": "80537d1c67effe7279d49fde6e7acecdb23aa5a32f832b3823bd5b1804129a16",
+      "hash": "08037bce8f1697928bc5943d1b16b0648f8415e74bbbb3ffdaf65c5754681f23"
+    }
+  ],
+  "merkle_sha256_v1": {
+    "empty_root": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "one_leaf": {
+      "leaves": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "root": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "two_leaves": {
+      "leaves": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "root": "e2d80f78d79027556d6619a1400605abbdca6bb6eb24e0831e33ecd5466fa5f6"
+    },
+    "three_leaves_duplicate_last": {
+      "leaves": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ],
+      "root": "b3a419030971470a7bb3b165e163a11973b3e81aa1dfb29c0769725346a76fbf"
+    }
+  }
+}

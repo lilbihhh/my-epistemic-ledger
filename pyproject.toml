@@ -4,11 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "epistemic-ledger"
-version = "0.1.0"
+version = "1.0.0"
 description = "Auditable AI reasoning stored in a tamper-evident hash-chained ledger"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "cryptography==50.0.2",
+    "jsonschema==4.26.0",
     "langgraph==1.2.24",
     "openai==3.57.0",
     "python-dotenv==1.2.4",
@@ -25,6 +27,9 @@ epistemic-ledger = "epistemic_ledger.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["epistemic_ledger*"]
+
+[tool.setuptools.package-data]
+epistemic_ledger = ["schema/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

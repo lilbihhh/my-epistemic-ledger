@@ -14,10 +14,20 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 GENESIS_HASH = "0" * 64
 HASH_ALG = "sha256"
+PROTOCOL_VERSION = "1.0"
+
+
+class EntrySigner(Protocol):
+    """Private key that can sign canonical entry bytes."""
+
+    public_hex: str
+
+    def sign(self, message: bytes) -> str:
+        """Return a hex Ed25519 signature."""
 
 
 class LedgerError(Exception):
@@ -251,9 +261,13 @@ class Ledger:
         self,
         path: str | Path,
         clock: Callable[[], datetime] | None = None,
+        signer: EntrySigner | None = None,
+        checker: Callable[[list[dict[str, Any]], dict[str, Any]], str | None] | None = None,
     ) -> None:
         self.path = Path(path)
         self._clock = clock or _utc_now
+        self._signer = signer
+        self._checker = checker
 
     def _position(self) -> tuple[int, str]:
         """Next index and the hash it must commit to. Call this under the lock."""
@@ -283,6 +297,7 @@ class Ledger:
         if stamped.tzinfo is None:
             raise LedgerError("ledger clock must return a timezone-aware datetime")
         entry: dict[str, Any] = {
+            "version": PROTOCOL_VERSION,
             "index": index,
             "timestamp": stamped.isoformat(),
             "session_id": session_id,
@@ -291,6 +306,10 @@ class Ledger:
             "payload": payload,
             "prev_hash": previous,
         }
+        if self._signer is not None:
+            entry["signer"] = self._signer.public_hex
+            signable = {key: value for key, value in entry.items() if key != "signature"}
+            entry["signature"] = self._signer.sign(canonical_bytes(signable))
         try:
             entry["hash"] = entry_hash(entry)
             line = canonical_bytes(entry)
@@ -325,6 +344,11 @@ class Ledger:
                 session_id=session_id,
                 payload=payload,
             )
+            if self._checker is not None:
+                prior: list[dict[str, Any]] = [] if index == 0 else read_entries(self.path)
+                reason = self._checker(prior, entry)
+                if reason is not None:
+                    raise LedgerError(reason)
             prefix = _missing_newline_prefix(descriptor, index)
             os.write(descriptor, prefix + line + b"\n")
             return entry
