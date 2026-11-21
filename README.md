@@ -2,6 +2,8 @@
 
 An append-only record of how an AI reached an answer. Each step — the question, the claims, the evidence, the confidence score, the final wording — is sealed into a JSONL file with the SHA-256 hash of the step before it. Edit any earlier line and `verify` names the entry that no longer checks out.
 
+The file format is [Epistemic Ledger Protocol 1.0](PROTOCOL.md): a versioned spec with a JSON Schema, test vectors, Ed25519 signatures, and Merkle checkpoints. Another implementation can verify a ledger or an exported bundle without this code.
+
 "Epistemic" here means the part that usually disappears: what was claimed, what was offered as support, and how sure the score says we should be. The last paragraph of a chat is a poor record of that. A hash-chained ledger is a record someone else can check without trusting the person who kept it.
 
 ## Why a ledger
@@ -12,7 +14,8 @@ Models are useful teammates and bad historians. A session can be reworded, a sco
 2. The question is split into claims.
 3. Each claim gets its own evidence record: reasoning, supports, caveats, and a quality label.
 4. Confidence is computed locally from those records, with the formula stored beside the number.
-5. The answer is written last, and it does not get to replace the score.
+5. The answer is written after the score, and it does not get to replace the score.
+6. A Merkle checkpoint can summarize the session in one root. A person can attest to or dispute a claim. Both are further entries in the same chain.
 
 Anyone with the file can recompute the chain. They do not need the API key, the vendor, or the original chat window.
 
@@ -43,7 +46,7 @@ python -m epistemic_ledger verify --ledger examples/why-is-the-sky-blue.jsonl
 LEDGER OK
   file     examples/why-is-the-sky-blue.jsonl
   entries  6
-  head     75e9e03005808becb7f7f9579fc0432aafb95126b2b77f3a4f1fe798f9e0bbce
+  head     7211724f820730708152bd270c7e6effc1d4f019f74de17b42253c6855aae281
 ```
 
 Copy `.env.example` to `.env` when you want a live model. `auto` (the default) uses Grok when `GROK_API_KEY` or `XAI_API_KEY` is set, otherwise OpenAI when `OPENAI_API_KEY` is set, otherwise the mock.
@@ -91,10 +94,10 @@ Uncertainties
   - c2 is speculative (1 supports, 2 caveats).
 
 Chain
-  OK  6 entries  head d6890dce5d7a135d
+  OK  6 entries  head 513826d2c913d471
 ```
 
-The claim scores and the answer text are stable for this question in mock mode. The head hash is not: every line includes a timestamp, so a new run seals different digests. The frozen file under `examples/` is the one that verifies to the head printed in the quick start.
+That block was run with `--no-checkpoint`. A normal `ask` appends a seventh entry, a Merkle checkpoint over the session, and `verify` reports 7 entries. The claim scores and the answer text are stable for this question in mock mode. The head hash is not: every line includes a timestamp, so a new run seals different digests. The frozen file under `examples/` is the one that verifies to the head printed in the quick start. It is the six reasoning steps, without a checkpoint.
 
 Changing one field in an old line, and leaving its stored hash alone, is enough to fail the check. The digests here are from one local edit. Another file produces another pair. The index and the check name are the part that stays the same:
 
@@ -124,11 +127,33 @@ flowchart TD
   D --> E[Record evidence for each claim]
   E --> S[Score confidence from that evidence]
   S --> A[Write the final answer]
+  A --> C[Merkle checkpoint]
   Q --> L[(ledger.jsonl)]
   D --> L
   E --> L
   S --> L
   A --> L
+  C --> L
+```
+
+Allowed order inside one session, including a human witness. Witness does not move the session backward or forward. The full rules are in the protocol.
+
+```mermaid
+stateDiagram-v2
+  [*] --> empty
+  empty --> question: question
+  question --> decompose: decompose
+  decompose --> evidence: evidence
+  evidence --> evidence: evidence
+  evidence --> score: score
+  score --> answer: answer
+  answer --> checkpoint: checkpoint
+  checkpoint --> checkpoint: checkpoint
+  decompose --> decompose: witness
+  evidence --> evidence: witness
+  score --> score: witness
+  answer --> answer: witness
+  checkpoint --> checkpoint: witness
 ```
 
 LangGraph runs those steps in order. Grok and OpenAI are called through the OpenAI-compatible chat completions API. Grok uses `https://api.x.ai/v1` and the model `grok-4.7` unless `GROK_MODEL` is set. OpenAI uses `gpt-4o-mini` unless `OPENAI_MODEL` is set. The mock client implements the same three calls — decompose, evidence, answer — and returns JSON without leaving the machine.
@@ -137,7 +162,7 @@ The score step does not call a model. The model can report a self-confidence, an
 
 ## How the hash chain works
 
-Each line is one JSON object. The hash covers every field except `hash` itself: index, timestamp, session id, step, payload, `hash_alg`, and `prev_hash`. The bytes are UTF-8 JSON with sorted keys and no extra whitespace. The digest is SHA-256, hex encoded.
+Each line is one JSON object. The hash covers every field except `hash` itself: version, index, timestamp, session id, step, payload, `hash_alg`, `prev_hash`, and, when the entry is signed, `signer` and `signature`. The bytes are UTF-8 JSON with sorted keys and no extra whitespace. The digest is SHA-256, hex encoded. Signatures are Ed25519 over that same encoding with `hash` and `signature` removed.
 
 The first line commits to a genesis value of 64 zeros. Every later line stores the previous line's hash as `prev_hash`.
 
@@ -153,12 +178,12 @@ The checked-in sample links like this (prefixes):
 
 | # | Step | prev | hash |
 | --- | --- | --- | --- |
-| 0 | question | `000000000000` | `635cdbb3f691` |
-| 1 | decompose | `635cdbb3f691` | `d1976be97bde` |
-| 2 | evidence | `d1976be97bde` | `a27d3c027a5e` |
-| 3 | evidence | `a27d3c027a5e` | `ef21db9614d9` |
-| 4 | score | `ef21db9614d9` | `afee7949714a` |
-| 5 | answer | `afee7949714a` | `75e9e0300580` |
+| 0 | question | `000000000000` | `63122b1029bd` |
+| 1 | decompose | `63122b1029bd` | `d0163d723b01` |
+| 2 | evidence | `d0163d723b01` | `826aab62e42b` |
+| 3 | evidence | `826aab62e42b` | `f5c31d279844` |
+| 4 | score | `f5c31d279844` | `23eec696af90` |
+| 5 | answer | `23eec696af90` | `7211724f8207` |
 
 `verify` walks from the top and stops at the first break:
 
@@ -192,11 +217,16 @@ The score is a bound on the recorded evidence. It is not a calibrated probabilit
 
 | Command | What it does |
 | --- | --- |
-| `ask "question"` | Run the pipeline and append every step |
+| `keygen --out ledger.key` | Write an Ed25519 key (mode 0600) and print the public key |
+| `ask "question"` | Run the pipeline, append every step, then a Merkle checkpoint |
+| `witness --session … --claim c1 --stance attest --name …` | Record a person attesting or disputing a claim |
+| `checkpoint --session …` | Append another Merkle root for that session |
 | `show` | Print each entry, its previous hash, and its hash |
-| `verify` | Check the chain and print the first bad index |
+| `verify` | Check the chain, schema, signatures, scores, and step order |
+| `export --out bundle.json` | Write a bundle a third party can verify alone |
+| `verify-bundle bundle.json` | Run the protocol on an exported bundle |
 
-Shared flags: `--ledger PATH` (default `LEDGER_PATH` or `ledger.jsonl`). `ask` also takes `--provider auto|mock|grok|openai`, `--model`, and `--session`. `show --session` keeps one session. Session ids match in full or by prefix.
+Shared flags: `--ledger PATH` (default `LEDGER_PATH` or `ledger.jsonl`) and `--key` (or `LEDGER_SIGNING_KEY`, or `./ledger.key` when that file exists). `ask` also takes `--provider auto|mock|grok|openai`, `--model`, `--session`, and `--no-checkpoint`. `show --session` keeps one session. Session ids match in full or by prefix. Entries are unsigned when no key is configured.
 
 `ledger.jsonl` in the working directory is gitignored. It is your log. The file under `examples/` is the public sample.
 
@@ -210,17 +240,23 @@ pytest -q
 
 GitHub Actions runs that lint and the tests on Python 3.11 and 3.12. Current LangGraph requires 3.11, so the older 3.8–3.10 pylint matrix is gone.
 
-Tests cover the hash link, a hand-edited line, a rewritten hash that still breaks the next link, a deleted middle entry, provider selection with no network, and a full mock run whose stored score matches `score_claims` recomputed from the evidence entries.
+Tests cover the hash link, a hand-edited line, a bad Ed25519 signature, an out-of-order step, the published test vectors, a deleted middle entry, provider selection with no network, and a full mock run whose stored score matches `score_claims` recomputed from the evidence entries.
 
 ## Layout
 
 ```text
+PROTOCOL.md                 Epistemic Ledger Protocol 1.0
 epistemic_ledger/
-  ledger.py       append-only hash chain and verify
-  confidence.py   structural-evidence-v1
-  pipeline.py     LangGraph: question → claims → evidence → score → answer
-  llm.py          Grok, OpenAI, and the offline mock
-  cli.py          ask, show, verify
+  ledger.py                 append-only hash chain
+  protocol.py               schema, signatures, state machine, scores, checkpoints
+  schema/entry.v1.json      JSON Schema
+  schema/test-vectors.json  published vectors
+  confidence.py             structural-evidence-v1
+  pipeline.py               LangGraph: question → claims → evidence → score → answer
+  signing.py                Ed25519
+  merkle.py                 merkle-sha256-v1
+  bundle.py                 standalone export
+  cli.py                    ask, witness, verify, export
 examples/why-is-the-sky-blue.jsonl
 ```
 
