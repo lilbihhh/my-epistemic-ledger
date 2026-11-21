@@ -7,8 +7,10 @@ genesis value of 64 zeros. Each later entry commits to the previous hash.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +31,7 @@ def canonical_bytes(body: dict[str, Any]) -> bytes:
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+        allow_nan=False,
     )
     return encoded.encode("utf-8")
 
@@ -41,6 +44,40 @@ def entry_hash(entry: dict[str, Any]) -> str:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _missing_newline_prefix(descriptor: int, index: int) -> bytes:
+    """Bytes to write before a new record so it stays on its own line.
+
+    An empty chain truncates leftover whitespace. A non-empty chain that
+    lost its trailing newline gets that newline back before the new record.
+    """
+    if index == 0:
+        os.ftruncate(descriptor, 0)
+        return b""
+    size = os.lseek(descriptor, 0, os.SEEK_END)
+    if size == 0:
+        return b""
+    os.lseek(descriptor, size - 1, os.SEEK_SET)
+    if os.read(descriptor, 1) == b"\n":
+        return b""
+    return b"\n"
+
+
+def record_lines(text: str) -> list[str]:
+    """Split on the physical newline only.
+
+    ``str.splitlines`` also splits on Unicode separators such as U+2028.
+    Those characters are legal inside a JSON string, so they must stay
+    inside the record. A trailing newline is the delimiter after the last
+    record, not an extra blank record.
+    """
+    if text.strip() == "":
+        return []
+    parts = text.split("\n")
+    if parts[-1] == "":
+        parts.pop()
+    return parts
 
 
 Mismatch = tuple[str | None, str | None]
@@ -168,7 +205,7 @@ def verify(path: str | Path) -> VerifyResult:
     previous = GENESIS_HASH
     head: str | None = None
     count = 0
-    for index, line in enumerate(text.splitlines()):
+    for index, line in enumerate(record_lines(text)):
         failure, digest = _check_entry(ledger_path, index, line, previous)
         if failure is not None:
             return failure
@@ -194,7 +231,7 @@ def read_entries(path: str | Path) -> list[dict[str, Any]]:
     if text.strip() == "":
         return []
     entries: list[dict[str, Any]] = []
-    for index, line in enumerate(text.splitlines()):
+    for index, line in enumerate(record_lines(text)):
         if not line.strip():
             raise LedgerError(f"blank line at index {index}")
         try:
@@ -218,26 +255,30 @@ class Ledger:
         self.path = Path(path)
         self._clock = clock or _utc_now
 
-    def append(
+    def _position(self) -> tuple[int, str]:
+        """Next index and the hash it must commit to. Call this under the lock."""
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return 0, GENESIS_HASH
+        report = verify(self.path)
+        if not report.ok:
+            raise LedgerError(
+                "refusing to append; ledger is broken at "
+                f"index {report.failure_index}: {report.reason}"
+            )
+        if report.entries == 0:
+            return 0, GENESIS_HASH
+        previous = report.head if report.head is not None else GENESIS_HASH
+        return report.entries, previous
+
+    def _seal(
         self,
         *,
+        index: int,
+        previous: str,
         step: str,
         session_id: str,
         payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Seal ``payload`` as the next entry and write it as one JSON line."""
-        if self.path.exists():
-            report = verify(self.path)
-            if not report.ok:
-                raise LedgerError(
-                    "refusing to append; ledger is broken at "
-                    f"index {report.failure_index}: {report.reason}"
-                )
-            index = report.entries
-            previous = report.head if report.head is not None else GENESIS_HASH
-        else:
-            index = 0
-            previous = GENESIS_HASH
+    ) -> tuple[dict[str, Any], bytes]:
         stamped = self._clock()
         if stamped.tzinfo is None:
             raise LedgerError("ledger clock must return a timezone-aware datetime")
@@ -250,9 +291,43 @@ class Ledger:
             "payload": payload,
             "prev_hash": previous,
         }
-        entry["hash"] = entry_hash(entry)
-        line = canonical_bytes(entry).decode("utf-8")
+        try:
+            entry["hash"] = entry_hash(entry)
+            line = canonical_bytes(entry)
+        except ValueError as exc:
+            raise LedgerError(f"entry is not strict JSON: {exc}") from exc
+        return entry, line
+
+    def append(
+        self,
+        *,
+        step: str,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Seal ``payload`` as the next entry and write it as one JSON line.
+
+        An exclusive lock covers the read of the current head and the write,
+        so two processes cannot seal the same index. A new file is mode 0600.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
-        return entry
+        created = not self.path.exists()
+        descriptor = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            if created:
+                os.fchmod(descriptor, 0o600)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            index, previous = self._position()
+            entry, line = self._seal(
+                index=index,
+                previous=previous,
+                step=step,
+                session_id=session_id,
+                payload=payload,
+            )
+            prefix = _missing_newline_prefix(descriptor, index)
+            os.write(descriptor, prefix + line + b"\n")
+            return entry
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)

@@ -1,11 +1,20 @@
 """Hash-chain tests, including hand edits and rewritten hashes."""
 
 import json
+import multiprocessing
 
 import pytest
 
 from epistemic_ledger.ledger import GENESIS_HASH, Ledger, LedgerError, entry_hash, verify
 from tests.support import ticking_clock
+
+
+def _append_five(path_and_session):
+    """Worker for the overlap test. One process, five sealed records."""
+    path, session = path_and_session
+    ledger = Ledger(path, clock=ticking_clock())
+    for number in range(5):
+        ledger.append(step="note", session_id=session, payload={"n": number})
 
 
 def _write_three(tmp_path):
@@ -111,6 +120,78 @@ def test_empty_file_verifies_and_missing_file_does_not(tmp_path):
     assert not missing.ok
     assert missing.reason == "ledger file not found"
     assert missing.failure_index is None
+
+
+def test_line_separator_in_the_session_id_stays_one_record(tmp_path):
+    """U+2028 inside a field must not split the JSONL record."""
+    ledger = Ledger(tmp_path / "ledger.jsonl", clock=ticking_clock())
+    session = "quarter\u2028review"
+    ledger.append(step="question", session_id=session, payload={"question": "hi"})
+    report = verify(ledger.path)
+    assert report.ok
+    assert report.entries == 1
+    raw = ledger.path.read_bytes()
+    assert raw.count(b"\n") == 1
+    assert b"\xe2\x80\xa8" in raw
+
+
+def test_append_repairs_a_missing_trailing_newline(tmp_path):
+    """A verified file with no final newline still accepts the next record."""
+    path = _write_three(tmp_path)
+    path.write_bytes(path.read_bytes().rstrip(b"\n"))
+    assert verify(path).ok
+    ledger = Ledger(path, clock=ticking_clock())
+    ledger.append(step="note", session_id="s", payload={"note": "next"})
+    report = verify(path)
+    assert report.ok
+    assert report.entries == 4
+    assert path.read_bytes().endswith(b"\n")
+
+
+def test_nan_is_not_written(tmp_path):
+    """Non-finite numbers are not sealed as bare NaN tokens."""
+    ledger = Ledger(tmp_path / "ledger.jsonl", clock=ticking_clock())
+    with pytest.raises(LedgerError, match="strict JSON"):
+        ledger.append(step="score", session_id="s", payload={"value": float("nan")})
+    assert verify(ledger.path).entries == 0
+
+
+def test_new_ledger_is_owner_readable_only(tmp_path):
+    """A ledger created here is mode 0600, not the process umask default."""
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path, clock=ticking_clock())
+    ledger.append(step="question", session_id="s", payload={"question": "private"})
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def _overlap(path, sessions):
+    context = multiprocessing.get_context("fork")
+    processes = []
+    for session in sessions:
+        process = context.Process(target=_append_five, args=((str(path), session),))
+        process.start()
+        processes.append(process)
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+
+
+def test_concurrent_appends_on_a_new_ledger(tmp_path):
+    """Overlapping writers on a new file still form one chain."""
+    path = tmp_path / "ledger.jsonl"
+    _overlap(path, ["s0", "s1", "s2", "s3"])
+    report = verify(path)
+    assert report.ok
+    assert report.entries == 20
+
+
+def test_concurrent_appends_on_an_existing_ledger(tmp_path):
+    """Overlapping writers extend an existing chain instead of reusing its head."""
+    path = _write_three(tmp_path)
+    _overlap(path, ["s0", "s1"])
+    report = verify(path)
+    assert report.ok
+    assert report.entries == 13
 
 
 def test_swapped_hash_field_is_detected(tmp_path):

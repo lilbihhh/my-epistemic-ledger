@@ -112,7 +112,9 @@ TAMPER DETECTED
   entries after the break were not trusted
 ```
 
-`verify` exits `0` when the chain holds and `1` when it does not. `show` still prints the lines of a broken file, and it exits `1` so a bad chain is not a quiet success. New steps are refused once the chain is broken, so a later run cannot bury the edit.
+`verify` exits `0` when the chain holds and `1` when it does not. `show` still prints the lines of a broken file, and it exits `1` so a bad chain is not a quiet success. New steps are refused once the chain is broken, so a later run cannot bury the edit. Two runs against the same file take an exclusive lock around the head read and the write, so they cannot seal the same index. A ledger file this tool creates is mode `0600`. Printed text drops terminal control characters; the file itself is left as written.
+
+Questions keep their internal line breaks. Only leading and trailing whitespace is removed before the question is recorded.
 
 ## What a run records
 

@@ -127,7 +127,7 @@ def run_question(
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Run one question and append every step to ``ledger``."""
-    cleaned = " ".join(question.split())
+    cleaned = question.strip()
     if not cleaned:
         raise LedgerError("question is empty")
     os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")

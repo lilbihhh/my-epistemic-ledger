@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from epistemic_ledger.ledger import VerifyResult
+
+
+def for_terminal(text: object) -> str:
+    """Drop characters that can rewrite a terminal when a ledger is printed.
+
+    Newlines and tabs stay. Other control characters, and Unicode line and
+    paragraph separators, become the replacement character. The file on disk
+    is unchanged.
+    """
+    rendered: list[str] = []
+    for char in str(text):
+        category = unicodedata.category(char)
+        safe = char in "\n\t" or (
+            not category.startswith("C") and category not in {"Zl", "Zp"}
+        )
+        rendered.append(char if safe else "\ufffd")
+    return "".join(rendered)
 
 
 def format_verification(result: VerifyResult) -> str:
@@ -30,7 +48,7 @@ def format_verification(result: VerifyResult) -> str:
         lines.append(f"  found    {result.found}")
     if result.failure_index is not None:
         lines.append("  entries after the break were not trusted")
-    return "\n".join(lines)
+    return for_terminal("\n".join(lines))
 
 
 def _payload_summary(step: Any, payload: dict[str, Any]) -> str:
@@ -60,7 +78,7 @@ def format_entry(entry: dict[str, Any]) -> str:
     digest = str(entry.get("hash", ""))
     previous = str(entry.get("prev_hash", ""))
     summary = _payload_summary(entry.get("step"), payload)
-    return (
+    return for_terminal(
         f"[{entry.get('index')}] {entry.get('timestamp')}  {entry.get('step')}"
         f"  session {entry.get('session_id')}\n"
         f"    prev {previous[:16]}  hash {digest[:16]}\n"
@@ -112,4 +130,4 @@ def format_run(result: dict[str, Any], verification: VerifyResult) -> str:
         lines.append(f"  OK  {verification.entries} entries")
     else:
         lines.append(f"  BROKEN at {verification.failure_index}: {verification.reason}")
-    return "\n".join(lines)
+    return for_terminal("\n".join(lines))

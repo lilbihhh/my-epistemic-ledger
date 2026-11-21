@@ -28,6 +28,7 @@ include = ["epistemic_ledger*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.pylint.main]
 py-version = "3.11"

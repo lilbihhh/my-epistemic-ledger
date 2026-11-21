@@ -93,7 +93,13 @@ def score_claim(evidence: dict[str, Any]) -> dict[str, Any]:
     weight = QUALITY_WEIGHTS[quality]
     supports = len(evidence.get("supports") or [])
     caveats = len(evidence.get("caveats") or [])
-    self_confidence = float(evidence.get("self_confidence", 0.5))
+    try:
+        self_confidence = float(evidence.get("self_confidence", 0.5))
+    except (TypeError, ValueError):
+        self_confidence = 0.5
+    if not math.isfinite(self_confidence):
+        self_confidence = 0.5
+    self_confidence = min(1.0, max(0.0, self_confidence))
     support_ratio = _round(supports / (supports + caveats + 1))
     disagreement = _round(abs(self_confidence - support_ratio))
     raw = (

@@ -1,0 +1,24 @@
+version: 2.1
+
+jobs:
+  lint-and-test:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install
+          command: |
+            python -m pip install --upgrade pip
+            pip install -e ".[dev]"
+      - run:
+          name: Lint
+          command: pylint epistemic_ledger tests main.py
+      - run:
+          name: Test
+          command: python -m pytest -q
+
+workflows:
+  ci:
+    jobs:
+      - lint-and-test
