@@ -44,3 +44,13 @@ __pycache__/
 env/
 venv/
 ENV/
+.venv/
+.netlify
+.pytest_cache/
+.pylint.d/
+*.egg-info/
+dist/
+build/
+ledger.jsonl
+ledger.key
+*.ledger-key
